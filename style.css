@@ -30,3 +30,18 @@ a.export{display:inline-flex;align-items:center;text-decoration:none;cursor:poin
 .script-import{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#263224;color:#d8e8cd;border:1px solid #506447;border-radius:7px;padding:11px;width:100%;font-size:11px;text-align:left}.script-import:hover{border-color:var(--lime)}.script-import span{font:9px var(--mono);color:var(--lime)}#import-note{margin:-10px 0 1px}@media(max-width:720px){aside>.script-import,aside>#import-note{grid-column:1/-1}}
 
 .heatmap-legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:9px 3px 0;padding:10px 13px;background:#19231e;border:1px solid #3f5043;border-radius:8px;color:#b6c9b4;font:10px var(--mono)}.heatmap-legend[hidden]{display:none}.heatmap-legend strong{color:var(--lime);font:9px var(--mono);letter-spacing:1px}.heatmap-legend small{color:#859b8d;font:9px var(--mono)}.heat-swatches{display:flex;border-radius:3px;overflow:hidden}.heat-swatches i{display:block;width:24px;height:11px;background:#5ebdc0}.heat-swatches i:nth-child(2){background:#86d0a5}.heat-swatches i:nth-child(3){background:#d2f78a}.heat-swatches i:nth-child(4){background:#f3bd68}.heat-swatches i:nth-child(5){background:#eb685b}@media(max-width:720px){.heatmap-legend{gap:7px}.heatmap-legend small{flex-basis:100%}.tool#heatmap{font-size:8px;padding:0 5px}}
+
+/* Release notes stay visible without crowding the converter. */
+.release-notes{border-bottom:1px solid var(--line);background:#172019;color:var(--text)}
+.release-notes summary{max-width:1920px;margin:auto;padding:12px 32px;display:flex;align-items:center;gap:14px;cursor:pointer;list-style:none;min-height:50px}
+.release-notes summary::-webkit-details-marker{display:none}
+.release-notes .release-tag{border:1px solid #597341;border-radius:4px;padding:4px 6px;color:var(--lime);font:10px var(--mono);letter-spacing:1px;white-space:nowrap}
+.release-notes summary strong{font:600 14px 'Space Grotesk',sans-serif;white-space:nowrap}
+.release-teaser{color:#abb9aa;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.release-arrow{margin-left:auto;color:var(--lime);transition:transform .2s}
+.release-notes[open] .release-arrow{transform:rotate(180deg)}
+.release-body{max-width:960px;margin:0 auto;padding:2px 32px 18px;color:#bac8b9;line-height:1.6}
+.release-body h2{color:var(--text);font:600 18px 'Space Grotesk',sans-serif;margin:8px 0}
+.release-body ul{padding-left:20px;margin:8px 0}.release-body li{margin:7px 0}.release-body strong{color:#e8eee8}
+.release-body p{margin:12px 0 0;color:#a0b19f;font-size:12px}
+@media(max-width:680px){.release-notes summary{padding:11px 16px;gap:8px;flex-wrap:wrap}.release-teaser{width:100%;order:3}.release-body{padding:2px 16px 16px}}
