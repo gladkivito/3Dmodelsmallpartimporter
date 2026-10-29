@@ -7,15 +7,17 @@ const preamble=`-- SmallPart Forge | static GLB surface build
 local HttpService = game:GetService("HttpService")
 local data = HttpService:JSONDecode([===[__DATA__]===])
 local function materialClass(part)
- local m = part.Material
- if m == Enum.Material.Glass then return "g" end
- if m == Enum.Material.Metal or m == Enum.Material.DiamondPlate or m == Enum.Material.CorrodedMetal then return "m" end
- if m == Enum.Material.Wood or m == Enum.Material.WoodPlanks then return "w" end
- if m == Enum.Material.Fabric then return "f" end
+ local m=part.Material
+ if m==Enum.Material.Glass then return "g" end
+ if m==Enum.Material.Metal or m==Enum.Material.DiamondPlate or m==Enum.Material.CorrodedMetal then return "m" end
+ if m==Enum.Material.Wood or m==Enum.Material.WoodPlanks then return "w" end
+ if m==Enum.Material.Fabric then return "f" end
  return "s"
 end
-local function sizeKey(sx,sy,sz,c,material)
- return string.format("%d,%d,%d|%d,%d,%d",math.floor(sx*10000+.5),math.floor(sy*10000+.5),math.floor(sz*10000+.5),math.floor(c.R*255+.5),math.floor(c.G*255+.5),math.floor(c.B*255+.5)) .. "|" .. (material == "t" and "s" or material or "s")
+local function sizeKey(sx,sy,sz,c)
+ -- The game can round Size Configuration to hundredths. Script 1 paints
+ -- those values before spawning, so match at the same precision.
+ return string.format("%d,%d,%d|%d,%d,%d",math.floor(sx*100+.5),math.floor(sy*100+.5),math.floor(sz*100+.5),math.floor(c.R*255+.5),math.floor(c.G*255+.5),math.floor(c.B*255+.5))
 end
 `;
 export function lua(parts,type){const compact=JSON.stringify(parts.map(p=>({p:p.p,s:p.s,b:p.basis,c:p.c,m:p.mat||"s",a:p.a??1})));let script;
@@ -40,11 +42,36 @@ assert(aircraft,"Spawn your aircraft first")
 local halfplate=aircraft:FindFirstChild("HalfPlate",true)
 local anchor=halfplate and halfplate:FindFirstChild("BlockStd")
 assert(anchor,"Add a HalfPlate anchor to the build before spawning")
+local gui=Instance.new("ScreenGui")
+gui.Name="SmallPartForgeAssembly"
+gui.ResetOnSpawn=false
+local label=Instance.new("TextLabel")
+label.Name="Progress"
+label.Size=UDim2.fromOffset(360,54)
+label.Position=UDim2.new(.5,-180,0,20)
+label.BackgroundColor3=Color3.fromRGB(16,24,19)
+label.BackgroundTransparency=.15
+label.TextColor3=Color3.fromRGB(203,249,139)
+label.TextWrapped=true
+label.Font=Enum.Font.Code
+label.TextSize=14
+label.Text="Collecting spawned SmallParts..."
+label.Parent=gui
+pcall(function()
+ local parent=(gethui and gethui()) or player:WaitForChild("PlayerGui")
+ local old=parent:FindFirstChild(gui.Name)
+ if old then old:Destroy() end
+ gui.Parent=parent
+end)
+local function status(message)
+ label.Text=message
+ print("[SmallPart Forge] "..message)
+end
 local buckets={}
-local candidates={}
+local available=0
 local function collect()
  buckets={}
- candidates={}
+ available=0
  for _,model in ipairs(aircraft:GetDescendants()) do
   if model.Name=="SmallPart" and model:IsA("Model") then
    local part=model:FindFirstChild("SPart")
@@ -55,52 +82,78 @@ local function collect()
      local v=cfg and cfg:FindFirstChild(key)
      sizes[j]=v and tonumber(v.Value) or math.clamp(({part.Size.X,part.Size.Y,part.Size.Z})[j]/2.5,.04,1)
     end
-    local k=sizeKey(sizes[1],sizes[2],sizes[3],part.Color,materialClass(part))
+    local k=sizeKey(sizes[1],sizes[2],sizes[3],part.Color)
     buckets[k]=buckets[k] or {}
-    table.insert(buckets[k],part)
-    table.insert(candidates,{part=part,size=sizes})
+    table.insert(buckets[k],{part=part,size=sizes,material=materialClass(part)})
+    available+=1
    end
   end
  end
 end
-local assigned={}
-for attempt=1,15 do
- collect()
- local missing={}
- local used={}
- assigned={}
- for i,d in ipairs(data) do
-  local k=sizeKey(math.clamp(d.s[1]/2.5,.04,1),math.clamp(d.s[2]/2.5,.04,1),math.clamp(d.s[3]/2.5,.04,1),Color3.fromRGB(d.c[1],d.c[2],d.c[3]),d.m)
-  local bucket=buckets[k]
-  if bucket and #bucket>0 then
-   assigned[i]=table.remove(bucket)
-   used[assigned[i]]=true
-  else table.insert(missing,i) end
- end
- -- The supplied Script 1 accepts a configuration tolerance of 0.006.
- -- Match only identical colors and sizes within that same tolerance.
- local unresolved=0
- for _,i in ipairs(missing) do
-  local d=data[i]
-  local color=Color3.fromRGB(d.c[1],d.c[2],d.c[3])
-  local expected={math.clamp(d.s[1]/2.5,.04,1),math.clamp(d.s[2]/2.5,.04,1),math.clamp(d.s[3]/2.5,.04,1)}
-  local best,score
-  for _,candidate in ipairs(candidates) do
-   if not used[candidate.part] then
-    local c=candidate.part.Color
-    local sameColor=math.floor(c.R*255+.5)==d.c[1] and math.floor(c.G*255+.5)==d.c[2] and math.floor(c.B*255+.5)==d.c[3]
-    local diff={math.abs(candidate.size[1]-expected[1]),math.abs(candidate.size[2]-expected[2]),math.abs(candidate.size[3]-expected[3])}
-    local sum=diff[1]+diff[2]+diff[3]
-    local sameMaterial=(d.m=="t" or materialClass(candidate.part)==d.m)
-    if sameColor and sameMaterial and math.max(diff[1],diff[2],diff[3])<=.006 and (not score or sum<score) then best=candidate score=sum end
-   end
-  end
-  if best then assigned[i]=best.part used[best.part]=true else unresolved+=1 end
- end
- if unresolved==0 then break end
- assert(attempt<15,string.format("%d parts have no matching size/color. Return to build mode, repaint, and respawn.",unresolved))
+collect()
+for second=1,15 do
+ if available>=#data then break end
+ status(string.format("Waiting for spawned parts: %d/%d",available,#data))
  task.wait(1)
+ collect()
 end
+if available<#data then status(string.format("Only %d/%d SmallParts spawned. Add blocks and respawn.",available,#data)) end
+assert(available>=#data,string.format("Only %d/%d SmallParts spawned. Add the missing blocks and respawn.",available,#data))
+status(string.format("Matching %d parts by painted color and size...",#data))
+local assigned,missing={},{}
+for i,d in ipairs(data) do
+ local wanted={math.clamp(d.s[1]/2.5,.04,1),math.clamp(d.s[2]/2.5,.04,1),math.clamp(d.s[3]/2.5,.04,1)}
+ local color=Color3.fromRGB(d.c[1],d.c[2],d.c[3])
+ local k=sizeKey(wanted[1],wanted[2],wanted[3],color)
+ local bucket=buckets[k]
+ local wantMaterial=d.m=="t" and "s" or d.m
+ if bucket then
+  for j=#bucket,1,-1 do
+   local rec=bucket[j]
+   local sameMaterial=rec.material==wantMaterial
+   if sameMaterial and math.abs(rec.size[1]-wanted[1])<=.006 and math.abs(rec.size[2]-wanted[2])<=.006 and math.abs(rec.size[3]-wanted[3])<=.006 then
+    assigned[i]=rec.part
+    table.remove(bucket,j)
+    break
+   end
+  end
+ end
+ if not assigned[i] then table.insert(missing,i) end
+ if i%200==0 then task.wait() end
+end
+-- Only check neighbouring rounded buckets for values close to the server's
+-- 0.006 Size Configuration tolerance. This remains bounded even at 9k parts.
+for n,i in ipairs(missing) do
+ local d=data[i]
+ local wanted={math.clamp(d.s[1]/2.5,.04,1),math.clamp(d.s[2]/2.5,.04,1),math.clamp(d.s[3]/2.5,.04,1)}
+ local color=Color3.fromRGB(d.c[1],d.c[2],d.c[3])
+ local base={math.floor(wanted[1]*100+.5),math.floor(wanted[2]*100+.5),math.floor(wanted[3]*100+.5)}
+ local suffix=string.format("|%d,%d,%d",math.floor(color.R*255+.5),math.floor(color.G*255+.5),math.floor(color.B*255+.5))
+ local wantMaterial=d.m=="t" and "s" or d.m
+ local function nearby(requireMaterial)
+  for dx=-1,1 do for dy=-1,1 do for dz=-1,1 do
+   local list=buckets[string.format("%d,%d,%d",base[1]+dx,base[2]+dy,base[3]+dz)..suffix]
+   if list then
+    for j=#list,1,-1 do
+     local rec=list[j]
+     local sameMaterial=rec.material==wantMaterial
+     if (not requireMaterial or sameMaterial) and math.abs(rec.size[1]-wanted[1])<=.006 and math.abs(rec.size[2]-wanted[2])<=.006 and math.abs(rec.size[3]-wanted[3])<=.006 then
+      table.remove(list,j)
+      return rec.part
+     end
+    end
+   end
+  end end end
+ end
+ assigned[i]=nearby(true)
+ if not assigned[i] then assigned[i]=nearby(false) end
+ if n%100==0 then task.wait() end
+end
+local unresolved=0
+for i=1,#data do if not assigned[i] then unresolved+=1 end end
+if unresolved>0 then status(string.format("%d paint/size matches missing. Run Paint Lua, then respawn.",unresolved)) end
+assert(unresolved==0,string.format("%d SmallParts do not match Script 1's paint/size data. Run Paint Lua fully in build mode, then respawn. No welds were sent.",unresolved))
+status("All "..#data.." parts matched. Starting welds...")
 assert(type(Unweld)=="function" and type(Weld)=="function","pcutils weld functions unavailable")
 for i,d in ipairs(data) do
  local part=assigned[i]
@@ -109,7 +162,11 @@ for i,d in ipairs(data) do
  part.CanCollide=false
  Unweld(part)
  Weld(anchor,part,relative)
- if i%40==0 then print("[SmallPart Forge] Assembled "..i.."/"..#data) task.wait() end
+ if i%40==0 then
+  if i%200==0 then status("Assembled "..i.."/"..#data) end
+  task.wait()
+ end
 end
-print("[SmallPart Forge] Static model assembled: "..#data.." SmallParts.")
+status("Assembly sent: "..#data.." SmallParts. Check the model in-game.")
+task.delay(15,function() if gui then gui:Destroy() end end)
 `;return preamble.replace('__DATA__',compact)+script;}
